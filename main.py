@@ -29,6 +29,9 @@ from telegram.ext import (
 )
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
+PORT = int(os.environ.get('PORT', '8443'))
+
+heroku_app_name = 'gidropod'
 
 # Enable logging
 logging.basicConfig(
@@ -168,13 +171,17 @@ def main() -> None:
 
     dispatcher.add_handler(conv_handler)
 
-    # Start the Bot
-    updater.start_polling()
+    # # Start the Bot
+    # updater.start_polling()
 
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
+    # Start the webhook
+    updater.start_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=BOT_TOKEN,
+        webhook_url=f"https://{heroku_app_name}.herokuapp.com/{BOT_TOKEN}")
     updater.idle()
+    logger.info('Bot started successfully')
 
 
 if __name__ == '__main__':
