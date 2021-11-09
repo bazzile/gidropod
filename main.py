@@ -30,6 +30,7 @@ from telegram.ext import (
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 PORT = int(os.environ.get('PORT', '8443'))
+SERVER_ENV = os.environ.get('SERVER_ENV', False)
 
 heroku_app_name = 'gidropod'
 
@@ -172,15 +173,16 @@ def main() -> None:
     dispatcher.add_handler(conv_handler)
 
     # # Start the Bot
-    # updater.start_polling()
 
-    # Start the webhook
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=BOT_TOKEN,
-        webhook_url=f"https://{heroku_app_name}.herokuapp.com/{BOT_TOKEN}")
-    updater.idle()
+    if SERVER_ENV:  # running on server
+        updater.start_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=BOT_TOKEN,
+            webhook_url=f"https://{heroku_app_name}.herokuapp.com/{BOT_TOKEN}")
+        updater.idle()
+    else:  # running locally
+        updater.start_polling()
     logger.info('Bot started successfully')
 
 
