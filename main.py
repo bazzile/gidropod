@@ -16,6 +16,7 @@ bot.
 
 import logging
 import os
+from typing import Dict
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
@@ -29,7 +30,6 @@ from telegram.ext import (
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -37,93 +37,96 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# ADDRESS, PHOTO, LOCATION, BIO = range(4)
+NEW, ADDRESS, TASK, PHONE, PRICE = range(5)
 
-GENDER, PHOTO, LOCATION, BIO = range(4)
+
+def facts_to_str(user_data: Dict[str, str]) -> str:
+    """Helper function for formatting the gathered user info."""
+    facts = [f'{key} - {value}' for key, value in user_data.items()]
+    return "\n".join(facts).join(['\n', '\n'])
 
 
 def start(update: Update, context: CallbackContext) -> int:
-    """Starts the conversation and asks the user about their gender."""
-    reply_keyboard = [['Boy', 'Girl', 'Other']]
+    """Starts the conversation and asks the user create a new order."""
+    reply_keyboard = [['Давай']]
 
     update.message.reply_text(
-        'Hi! My name is Professor Bot. I will hold a conversation with you. '
-        'Send /cancel to stop talking to me.\n\n'
-        'Are you a boy or a girl?',
+        'Привет! Создадим новый заказ?\n'
+        'Жми /cancel если передумал.\n\n',
         reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True, input_field_placeholder='Boy or Girl?'
+            reply_keyboard, one_time_keyboard=True
         ),
     )
 
-    return GENDER
+    return NEW
 
 
-def gender(update: Update, context: CallbackContext) -> int:
-    """Stores the selected gender and asks for a photo."""
+def new(update: Update, context: CallbackContext) -> int:
     user = update.message.from_user
-    logger.info("Gender of %s: %s", user.first_name, update.message.text)
+    logger.info("User %s created new order", user)
+
+    update.message.reply_text('Отлично, куда едем?', reply_markup=ReplyKeyboardRemove())
+
+    return ADDRESS
+
+
+def address(update: Update, context: CallbackContext) -> int:
+    """Stores the info about the address."""
+    context.user_data['address'] = update.message.text
+    logger.info("Address: %s", update.message.text)
+
+    update.message.reply_text('Отлично, какой вид работ?')
+
+    return TASK
+
+
+def task(update: Update, context: CallbackContext) -> int:
+    """Stores the info about the task."""
+    context.user_data['task'] = update.message.text
+    logger.info("Task: %s", update.message.text)
+
+    update.message.reply_text('Отлично, а телефон?\n'
+                              '/skip чтобы не давать')
+
+    return PHONE
+
+
+def phone(update: Update, context: CallbackContext) -> int:
+    """Stores the info about the task."""
+    context.user_data['phone'] = update.message.text
+    logger.info("Phone: %s", update.message.text)
+
+    update.message.reply_text('А цена?')
+
+    return PRICE
+
+
+def skip_phone(update: Update, context: CallbackContext) -> int:
+    """Skips the phone and asks for a location."""
+    user = update.message.from_user
+    logger.info("User %s did not provide a phone.", user.first_name)
     update.message.reply_text(
-        'I see! Please send me a photo of yourself, '
-        'so I know what you look like, or send /skip if you don\'t want to.',
-        reply_markup=ReplyKeyboardRemove(),
+        'Ну нет так нет. А цена?.'
     )
 
-    return PHOTO
+    return PRICE
 
 
-def photo(update: Update, context: CallbackContext) -> int:
-    """Stores the photo and asks for a location."""
-    user = update.message.from_user
-    photo_file = update.message.photo[-1].get_file()
-    photo_file.download('user_photo.jpg')
-    logger.info("Photo of %s: %s", user.first_name, 'user_photo.jpg')
+def price(update: Update, context: CallbackContext) -> int:
+    """Stores the info about the task."""
+    context.user_data['price'] = update.message.text
+    logger.info("Price: %s", update.message.text)
+
+    update.message.reply_text('Готово. Заказ создан!')
+
+    user_data = context.user_data
     update.message.reply_text(
-        'Gorgeous! Now, send me your location please, or send /skip if you don\'t want to.'
+        f"Инфо по заказу: {facts_to_str(user_data)}"
+        f"\nТы - пидор!"
     )
 
-    return LOCATION
-
-
-def skip_photo(update: Update, context: CallbackContext) -> int:
-    """Skips the photo and asks for a location."""
-    user = update.message.from_user
-    logger.info("User %s did not send a photo.", user.first_name)
-    update.message.reply_text(
-        'I bet you look great! Now, send me your location please, or send /skip.'
-    )
-
-    return LOCATION
-
-
-def location(update: Update, context: CallbackContext) -> int:
-    """Stores the location and asks for some info about the user."""
-    user = update.message.from_user
-    user_location = update.message.location
-    logger.info(
-        "Location of %s: %f / %f", user.first_name, user_location.latitude, user_location.longitude
-    )
-    update.message.reply_text(
-        'Maybe I can visit you sometime! At last, tell me something about yourself.'
-    )
-
-    return BIO
-
-
-def skip_location(update: Update, context: CallbackContext) -> int:
-    """Skips the location and asks for info about the user."""
-    user = update.message.from_user
-    logger.info("User %s did not send a location.", user.first_name)
-    update.message.reply_text(
-        'You seem a bit paranoid! At last, tell me something about yourself.'
-    )
-
-    return BIO
-
-
-def bio(update: Update, context: CallbackContext) -> int:
-    """Stores the info about the user and ends the conversation."""
-    user = update.message.from_user
-    logger.info("Bio of %s: %s", user.first_name, update.message.text)
-    update.message.reply_text('Thank you! I hope we can talk again some day.')
+    user_data.clear()
 
     return ConversationHandler.END
 
@@ -133,7 +136,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
     user = update.message.from_user
     logger.info("User %s canceled the conversation.", user.first_name)
     update.message.reply_text(
-        'Bye! I hope we can talk again some day.', reply_markup=ReplyKeyboardRemove()
+        'Ну ладно, пока.', reply_markup=ReplyKeyboardRemove()
     )
 
     return ConversationHandler.END
@@ -151,13 +154,14 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            GENDER: [MessageHandler(Filters.regex('^(Boy|Girl|Other)$'), gender)],
-            PHOTO: [MessageHandler(Filters.photo, photo), CommandHandler('skip', skip_photo)],
-            LOCATION: [
-                MessageHandler(Filters.location, location),
-                CommandHandler('skip', skip_location),
+            NEW: [MessageHandler(Filters.regex('^(Давай)$'), new)],
+            ADDRESS: [MessageHandler(Filters.text & ~Filters.command, address)],
+            TASK: [MessageHandler(Filters.text, task)],
+            PHONE: [
+                MessageHandler(Filters.text & ~Filters.command, phone),
+                CommandHandler('skip', skip_phone),
             ],
-            BIO: [MessageHandler(Filters.text & ~Filters.command, bio)],
+            PRICE: [MessageHandler(Filters.text & ~Filters.command, price)],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
     )
