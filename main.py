@@ -17,15 +17,16 @@ bot.
 import logging
 from typing import Dict
 
-from telegram import ReplyKeyboardMarkup, Update, ReplyKeyboardRemove
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Updater,
     CommandHandler,
-    MessageHandler,
-    Filters,
+    CallbackQueryHandler,
     ConversationHandler,
     CallbackContext,
 )
+
+from database import OrderUpdater
 
 from config import (
     BOT_TOKEN,
@@ -47,111 +48,101 @@ logger = logging.getLogger(__name__)
 
 logger.info(BOT_TOKEN)
 
-CREATE_ORDER, CHOOSING, TYPING_REPLY, TYPING_CHOICE = range(4)
+# Stages
+FIRST, SECOND = range(2)
+# Callback data
+ONE, TWO, THREE, FOUR = range(4)
 
-reply_keyboard = [
-    ['Age', 'Favourite colour'],
-    ['Number of siblings', 'Something else...'],
-    ['Done'],
+
+d = [
+    {'id': 0, 'Name': 'Vas', 'Selected': True},
+    {'id': 1, 'Name': 'Ser', 'Selected': True},
 ]
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 
-
-def facts_to_str(user_data: Dict[str, str]) -> str:
-    """Helper function for formatting the gathered user info."""
-    facts = [f'{key} - {value}' for key, value in user_data.items()]
-    return "\n".join(facts).join(['\n', '\n'])
+order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
+global operators
 
 
 def start(update: Update, context: CallbackContext) -> int:
-    """Start the conversation and ask user for input."""
-    update.message.reply_text(
-        f"Привет! Добавь заказ через форму {ORDER_FORM_URL}\nзатем - жми 'Далее'",
-        reply_markup=ReplyKeyboardMarkup([['Далее'], ['Отмена']], one_time_keyboard=True)
+    """Send message on `/start`."""
+    # Get user that sent /start and log his name
+    user = update.message.from_user
+    logger.info("User %s started the conversation.", user.first_name)
+    # Build InlineKeyboard where each button has a displayed text
+    # and a string as callback_data
+    # The keyboard is a list of button rows, where each row is in turn
+    # a list (hence `[[...]]`).
+
+    global operators
+
+    operator_buttons = [
+        InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
+    control_buttons = [
+        InlineKeyboardButton("Готово", callback_data=str("done")),
+        InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
+
+    keyboard = [[button] for button in operator_buttons] + [control_buttons]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    # Send message with text and appended InlineKeyboard
+    update.message.reply_text("Кто?", reply_markup=reply_markup)
+    # Tell ConversationHandler that we're in state `FIRST` now
+    return FIRST
+
+
+def one(update: Update, context: CallbackContext) -> int:
+    """Show new choice of buttons"""
+    query = update.callback_query
+    query.answer()
+
+    selected_person = query.data
+
+    logger.info('DATA: ' + selected_person)
+
+    # for item in d:
+    #     if item['id'] == int(selected_person):
+    #         item['Selected'] = not item['Selected']
+    #         if item['Name'].startswith('+'):
+    #             item['Name'] = item['Name'].replace('+', '')
+    #         else:
+    #             item['Name'] = '+' + item['Name']
+
+    for operator in operators:
+        if operator['telegram_id'] == int(selected_person):
+            operator['Selected'] = not operator['Selected']
+            if operator['DisplayName'].startswith('+'):
+                operator['DisplayName'] = operator['DisplayName'].replace('+', '')
+            else:
+                operator['DisplayName'] = '+' + operator['DisplayName']
+
+    operator_buttons = [
+        InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
+    control_buttons = [
+        InlineKeyboardButton("Готово", callback_data=str("done")),
+        InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
+
+    keyboard = [[button] for button in operator_buttons] + [control_buttons]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(
+        text="Кто?", reply_markup=reply_markup
     )
-
-    return CREATE_ORDER
-
-
-def poll(update: Update, context: CallbackContext) -> None:
-    """Sends a predefined poll"""
-    questions = ["Железнов Сергей Александрович", "Лобанов Василий Константинович",
-                 "1Железнов Сергей Александрович", "1Лобанов Василий Константинович",
-                 "2Железнов Сергей Александрович", "2Лобанов Василий Константинович",
-                 "3Железнов Сергей Александрович", "3Лобанов Василий Константинович",
-                 "4Железнов Сергей Александрович", "4Лобанов Василий Константинович",
-                 "5Железнов Сергей Александрович", "5Лобанов Василий Константинович"]
-    message = context.bot.send_poll(
-        update.effective_chat.id,
-        "Кто поедет?",
-        questions,
-        is_anonymous=False,
-        allows_multiple_answers=True,
-    )
-    # Save some info about the poll the bot_data for later use in receive_poll_answer
-    payload = {
-        message.poll.id: {
-            "questions": questions,
-            "message_id": message.message_id,
-            "chat_id": update.effective_chat.id,
-            "answers": 0,
-        }
-    }
-    context.bot_data.update(payload)
+    return FIRST
 
 
-def regular_choice(update: Update, context: CallbackContext) -> int:
-    """Ask the user for info about the selected predefined choice."""
-    text = update.message.text
-    context.user_data['choice'] = text
-    update.message.reply_text(f'Your {text.lower()}? Yes, I would love to hear about that!')
-
-    return TYPING_REPLY
-
-
-def custom_choice(update: Update, context: CallbackContext) -> int:
-    """Ask the user for a description of a custom category."""
-    update.message.reply_text(
-        'Alright, please send me the category first, for example "Most impressive skill"'
-    )
-
-    return TYPING_CHOICE
-
-
-def received_information(update: Update, context: CallbackContext) -> int:
-    """Store info provided by user and ask for the next category."""
-    user_data = context.user_data
-    text = update.message.text
-    category = user_data['choice']
-    user_data[category] = text
-    del user_data['choice']
-
-    update.message.reply_text(
-        "Neat! Just so you know, this is what you already told me:"
-        f"{facts_to_str(user_data)} You can tell me more, or change your opinion"
-        " on something.",
-        reply_markup=markup,
-    )
-
-    return CHOOSING
-
-
-def done(update: Update, context: CallbackContext) -> int:
-    """Display the gathered info and end the conversation."""
-    user_data = context.user_data
-    if 'choice' in user_data:
-        del user_data['choice']
-
-    update.message.reply_text(
-        f"I learned these facts about you: {facts_to_str(user_data)}Until next time!",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-
-    user_data.clear()
+def end(update: Update, context: CallbackContext) -> int:
+    """Returns `ConversationHandler.END`, which tells the
+    ConversationHandler that the conversation is over.
+    """
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text(text="See you next time!")
     return ConversationHandler.END
 
 
 def main() -> None:
+    global operators
+    operators = order_updater.get_operators()
+    operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
     """Run the bot."""
     # Create the Updater and pass it your bot's token.
     updater = Updater(BOT_TOKEN)
@@ -159,31 +150,26 @@ def main() -> None:
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
 
-    # Add conversation handler with the states CHOOSING, TYPING_CHOICE and TYPING_REPLY
+    # Setup conversation handler with the states FIRST and SECOND
+    # Use the pattern parameter to pass CallbackQueries with specific
+    # data pattern to the corresponding handlers.
+    # ^ means "start of line/string"
+    # $ means "end of line/string"
+    # So ^ABC$ will only allow 'ABC'
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            CREATE_ORDER: [MessageHandler(
-                    Filters.regex('^(Далее)$') & ~(Filters.command | Filters.regex('^Отмена')), poll)],
-            CHOOSING: [
-                MessageHandler(
-                    Filters.regex('^(Age|Favourite colour|Number of siblings)$'), regular_choice
-                ),
-                MessageHandler(Filters.regex('^Something else...$'), custom_choice),
+            FIRST: [
+                # CallbackQueryHandler(one, pattern='^(0|1)$'),
+                CallbackQueryHandler(one, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
+                CallbackQueryHandler(end, pattern='^(cancel|done)$'),
             ],
-            TYPING_CHOICE: [
-                MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Done$')), regular_choice
-                )
-            ],
-            TYPING_REPLY: [
-                MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Done$')),
-                    received_information,
-                )
-            ],
+            # SECOND: [
+            #     CallbackQueryHandler(start_over, pattern='^' + str(ONE) + '$'),
+            #     CallbackQueryHandler(end, pattern='^' + str(TWO) + '$'),
+            # ],
         },
-        fallbacks=[MessageHandler(Filters.regex('^Отмена'), done)],
+        fallbacks=[CommandHandler('start', start)],
     )
 
     dispatcher.add_handler(conv_handler)
