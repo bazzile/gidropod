@@ -54,11 +54,6 @@ FIRST, SECOND = range(2)
 ONE, TWO, THREE, FOUR = range(4)
 
 
-d = [
-    {'id': 0, 'Name': 'Vas', 'Selected': True},
-    {'id': 1, 'Name': 'Ser', 'Selected': True},
-]
-
 order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
 global operators
 
@@ -74,11 +69,13 @@ def start(update: Update, context: CallbackContext) -> int:
     # a list (hence `[[...]]`).
 
     global operators
+    operators = order_updater.get_operators()
+    operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
 
     operator_buttons = [
         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
     control_buttons = [
-        InlineKeyboardButton("Готово", callback_data=str("done")),
+        InlineKeyboardButton("Назначить", callback_data=str("done")),
         InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
 
     keyboard = [[button] for button in operator_buttons] + [control_buttons]
@@ -118,7 +115,7 @@ def one(update: Update, context: CallbackContext) -> int:
     operator_buttons = [
         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
     control_buttons = [
-        InlineKeyboardButton("Готово", callback_data=str("done")),
+        InlineKeyboardButton("Назначить", callback_data=str("done")),
         InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
 
     keyboard = [[button] for button in operator_buttons] + [control_buttons]
@@ -133,9 +130,23 @@ def end(update: Update, context: CallbackContext) -> int:
     """Returns `ConversationHandler.END`, which tells the
     ConversationHandler that the conversation is over.
     """
+    global operators
+    selected_operators = [operator['ФИО'] for operator in operators if operator['Selected']]
+
     query = update.callback_query
     query.answer()
-    query.edit_message_text(text="See you next time!")
+    query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(selected_operators)))
+    return ConversationHandler.END
+
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    """Returns `ConversationHandler.END`, which tells the
+    ConversationHandler that the conversation is over.
+    """
+
+    query = update.callback_query
+    query.answer()
+    query.edit_message_text(text="Отмена. На заказ никто не выбран")
     return ConversationHandler.END
 
 
@@ -160,9 +171,9 @@ def main() -> None:
         entry_points=[CommandHandler('start', start)],
         states={
             FIRST: [
-                # CallbackQueryHandler(one, pattern='^(0|1)$'),
                 CallbackQueryHandler(one, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
-                CallbackQueryHandler(end, pattern='^(cancel|done)$'),
+                CallbackQueryHandler(end, pattern='^(done)$'),
+                CallbackQueryHandler(cancel, pattern='^(cancel)$'),
             ],
             # SECOND: [
             #     CallbackQueryHandler(start_over, pattern='^' + str(ONE) + '$'),
