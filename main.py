@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 logger.info(BOT_TOKEN)
 
 # Stages
-FIRST, SECOND = range(2)
+FIRST, SECOND, THIRD = range(3)
 # Callback data
 ONE, TWO, THREE, FOUR = range(4)
 
@@ -73,7 +73,7 @@ def start(update: Update, context: CallbackContext) -> int:
     operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
 
     keyboard = [[
-        InlineKeyboardButton("Выбрать операторов", callback_data=str("select")),
+        InlineKeyboardButton("Посмотреть заказ", callback_data=str("task")),
         InlineKeyboardButton("Отмена", callback_data=str("cancel")),
     ]]
 
@@ -85,36 +85,46 @@ def start(update: Update, context: CallbackContext) -> int:
     return FIRST
 
 
-# def start(update: Update, context: CallbackContext) -> int:
-#     """Send message on `/start`."""
-#     # Get user that sent /start and log his name
-#     user = update.message.from_user
-#     logger.info("User %s started the conversation.", user.first_name)
-#     # Build InlineKeyboard where each button has a displayed text
-#     # and a string as callback_data
-#     # The keyboard is a list of button rows, where each row is in turn
-#     # a list (hence `[[...]]`).
+# def one(update: Update, context: CallbackContext) -> int:
+#     """Show new choice of buttons"""
+#     query = update.callback_query
+#     query.answer()
 #
-#     global operators
-#     operators = order_updater.get_operators()
-#     operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
-#
-#     operator_buttons = [
-#         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
-#     control_buttons = [
-#         InlineKeyboardButton("Назначить", callback_data=str("done")),
-#         InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
-#
-#     keyboard = [[button] for button in operator_buttons] + [control_buttons]
+#     keyboard = [[
+#         InlineKeyboardButton("Выбрать операторов", callback_data=str("select")),
+#         InlineKeyboardButton("Отмена", callback_data=str("cancel")),
+#     ]]
 #
 #     reply_markup = InlineKeyboardMarkup(keyboard)
-#     # Send message with text and appended InlineKeyboard
-#     update.message.reply_text("Кто?", reply_markup=reply_markup)
-#     # Tell ConversationHandler that we're in state `FIRST` now
-#     return FIRST
+#     query.edit_message_text(
+#         text="Заказ:", reply_markup=reply_markup
+#     )
+#     # Transfer to conversation state `SECOND`
+#     return THIRD
 
 
-def one(update: Update, context: CallbackContext) -> int:
+def two(update: Update, context: CallbackContext) -> int:
+    """Show new choice of buttons"""
+    query = update.callback_query
+    query.answer()
+
+    keyboard = [[
+        InlineKeyboardButton("Выбрать операторов", callback_data=str("select")),
+        InlineKeyboardButton("Отмена", callback_data=str("cancel")),
+    ]]
+
+    last_order = order_updater.get_last_order()
+    last_order = ",\n".join("=".join((str(k), str(v))) for k, v in last_order.items())
+    logger.info(last_order)
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    query.edit_message_text(
+        text=f"Заказ:\n{last_order}", reply_markup=reply_markup
+    )
+    return SECOND
+
+
+def three(update: Update, context: CallbackContext) -> int:
     """Show new choice of buttons"""
     query = update.callback_query
     query.answer()
@@ -153,7 +163,7 @@ def one(update: Update, context: CallbackContext) -> int:
     query.edit_message_text(
         text="Операторы:", reply_markup=reply_markup
     )
-    return SECOND
+    return THIRD
 
 
 def end(update: Update, context: CallbackContext) -> int:
@@ -201,11 +211,15 @@ def main() -> None:
         entry_points=[CommandHandler('start', start)],
         states={
             FIRST: [
-                CallbackQueryHandler(one, pattern='^select$'),
+                CallbackQueryHandler(two, pattern='^(task)$'),
                 CallbackQueryHandler(cancel, pattern='^(cancel)$'),
             ],
             SECOND: [
-                CallbackQueryHandler(one, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
+                CallbackQueryHandler(three, pattern='^(select)$'),
+                CallbackQueryHandler(cancel, pattern='^(cancel)$'),
+            ],
+            THIRD: [
+                CallbackQueryHandler(three, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
                 CallbackQueryHandler(end, pattern='^(done)$'),
                 CallbackQueryHandler(cancel, pattern='^(cancel)$'),
             ],
