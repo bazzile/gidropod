@@ -72,19 +72,46 @@ def start(update: Update, context: CallbackContext) -> int:
     operators = order_updater.get_operators()
     operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
 
-    operator_buttons = [
-        InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
-    control_buttons = [
-        InlineKeyboardButton("Назначить", callback_data=str("done")),
-        InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
-
-    keyboard = [[button] for button in operator_buttons] + [control_buttons]
+    keyboard = [[
+        InlineKeyboardButton("Выбрать операторов", callback_data=str("select")),
+        InlineKeyboardButton("Отмена", callback_data=str("cancel")),
+    ]]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     # Send message with text and appended InlineKeyboard
-    update.message.reply_text("Кто?", reply_markup=reply_markup)
+    update.message.reply_text(
+        f"Привет!\nНе забудь добавить заказ, прежде чем выбрать операторов:\n{ORDER_FORM_URL}", reply_markup=reply_markup)
     # Tell ConversationHandler that we're in state `FIRST` now
     return FIRST
+
+
+# def start(update: Update, context: CallbackContext) -> int:
+#     """Send message on `/start`."""
+#     # Get user that sent /start and log his name
+#     user = update.message.from_user
+#     logger.info("User %s started the conversation.", user.first_name)
+#     # Build InlineKeyboard where each button has a displayed text
+#     # and a string as callback_data
+#     # The keyboard is a list of button rows, where each row is in turn
+#     # a list (hence `[[...]]`).
+#
+#     global operators
+#     operators = order_updater.get_operators()
+#     operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
+#
+#     operator_buttons = [
+#         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
+#     control_buttons = [
+#         InlineKeyboardButton("Назначить", callback_data=str("done")),
+#         InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
+#
+#     keyboard = [[button] for button in operator_buttons] + [control_buttons]
+#
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+#     # Send message with text and appended InlineKeyboard
+#     update.message.reply_text("Кто?", reply_markup=reply_markup)
+#     # Tell ConversationHandler that we're in state `FIRST` now
+#     return FIRST
 
 
 def one(update: Update, context: CallbackContext) -> int:
@@ -92,9 +119,12 @@ def one(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
 
-    selected_person = query.data
+    if query.data == 'select':
+        selected_person = 0
+    else:
+        selected_person = query.data
 
-    logger.info('DATA: ' + selected_person)
+    logger.info('DATA: ' + str(selected_person))
 
     # for item in d:
     #     if item['id'] == int(selected_person):
@@ -121,9 +151,9 @@ def one(update: Update, context: CallbackContext) -> int:
     keyboard = [[button] for button in operator_buttons] + [control_buttons]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.edit_message_text(
-        text="Кто?", reply_markup=reply_markup
+        text="Операторы:", reply_markup=reply_markup
     )
-    return FIRST
+    return SECOND
 
 
 def end(update: Update, context: CallbackContext) -> int:
@@ -171,14 +201,15 @@ def main() -> None:
         entry_points=[CommandHandler('start', start)],
         states={
             FIRST: [
+                CallbackQueryHandler(one, pattern='^select$'),
+                CallbackQueryHandler(cancel, pattern='^(cancel)$'),
+            ],
+            SECOND: [
                 CallbackQueryHandler(one, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
                 CallbackQueryHandler(end, pattern='^(done)$'),
                 CallbackQueryHandler(cancel, pattern='^(cancel)$'),
             ],
-            # SECOND: [
-            #     CallbackQueryHandler(start_over, pattern='^' + str(ONE) + '$'),
-            #     CallbackQueryHandler(end, pattern='^' + str(TWO) + '$'),
-            # ],
+
         },
         fallbacks=[CommandHandler('start', start)],
     )
