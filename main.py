@@ -15,10 +15,9 @@ bot.
 """
 
 import logging
-import os
 from typing import Dict
 
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram import ReplyKeyboardMarkup, Update, ReplyKeyboardRemove
 from telegram.ext import (
     Updater,
     CommandHandler,
@@ -28,8 +27,12 @@ from telegram.ext import (
     CallbackContext,
 )
 
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-PORT = int(os.environ.get('PORT', '8443'))
+from config import (
+    BOT_TOKEN,
+    PORT,
+    GOOGLE_BOT_PKEY,
+    ORDERS_DOCUMENT_ID
+)
 
 heroku_app_name = 'gidropod'
 
@@ -40,8 +43,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# ADDRESS, PHOTO, LOCATION, BIO = range(4)
-NEW, ADDRESS, TASK, PHONE, PRICE = range(5)
+CHOOSING, TYPING_REPLY, TYPING_CHOICE = range(3)
+
+reply_keyboard = [
+    ['Age', 'Favourite colour'],
+    ['Number of siblings', 'Something else...'],
+    ['Done'],
+]
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 
 
 def facts_to_str(user_data: Dict[str, str]) -> str:
@@ -51,122 +60,98 @@ def facts_to_str(user_data: Dict[str, str]) -> str:
 
 
 def start(update: Update, context: CallbackContext) -> int:
-    """Starts the conversation and asks the user create a new order."""
-    reply_keyboard = [['Давай']]
-
+    """Start the conversation and ask user for input."""
     update.message.reply_text(
-        'Привет! Создадим новый заказ?\n'
-        'Жми /cancel если передумал.\n\n',
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True
-        ),
+        "Hi! My name is Doctor Botter. I will hold a more complex conversation with you. "
+        "Why don't you tell me something about yourself?",
+        reply_markup=markup,
     )
 
-    return NEW
+    return CHOOSING
 
 
-def new(update: Update, context: CallbackContext) -> int:
-    user = update.message.from_user
-    logger.info("User %s created new order", user)
+def regular_choice(update: Update, context: CallbackContext) -> int:
+    """Ask the user for info about the selected predefined choice."""
+    text = update.message.text
+    context.user_data['choice'] = text
+    update.message.reply_text(f'Your {text.lower()}? Yes, I would love to hear about that!')
 
-    update.message.reply_text('Отлично, куда едем?', reply_markup=ReplyKeyboardRemove())
-
-    return ADDRESS
-
-
-def address(update: Update, context: CallbackContext) -> int:
-    """Stores the info about the address."""
-    context.user_data['address'] = update.message.text
-    logger.info("Address: %s", update.message.text)
-
-    update.message.reply_text('Отлично, какой вид работ?')
-
-    return TASK
+    return TYPING_REPLY
 
 
-def task(update: Update, context: CallbackContext) -> int:
-    """Stores the info about the task."""
-    context.user_data['task'] = update.message.text
-    logger.info("Task: %s", update.message.text)
-
-    update.message.reply_text('Отлично, а телефон?\n'
-                              '/skip чтобы не давать')
-
-    return PHONE
-
-
-def phone(update: Update, context: CallbackContext) -> int:
-    """Stores the info about the task."""
-    context.user_data['phone'] = update.message.text
-    logger.info("Phone: %s", update.message.text)
-
-    update.message.reply_text('А цена?')
-
-    return PRICE
-
-
-def skip_phone(update: Update, context: CallbackContext) -> int:
-    """Skips the phone and asks for a location."""
-    user = update.message.from_user
-    logger.info("User %s did not provide a phone.", user.first_name)
+def custom_choice(update: Update, context: CallbackContext) -> int:
+    """Ask the user for a description of a custom category."""
     update.message.reply_text(
-        'Ну нет так нет. А цена?.'
+        'Alright, please send me the category first, for example "Most impressive skill"'
     )
 
-    return PRICE
+    return TYPING_CHOICE
 
 
-def price(update: Update, context: CallbackContext) -> int:
-    """Stores the info about the task."""
-    context.user_data['price'] = update.message.text
-    logger.info("Price: %s", update.message.text)
-
-    update.message.reply_text('Готово. Заказ создан!')
-
+def received_information(update: Update, context: CallbackContext) -> int:
+    """Store info provided by user and ask for the next category."""
     user_data = context.user_data
+    text = update.message.text
+    category = user_data['choice']
+    user_data[category] = text
+    del user_data['choice']
+
     update.message.reply_text(
-        f"Инфо по заказу: {facts_to_str(user_data)}"
-        f"\nТы - пидор!"
+        "Neat! Just so you know, this is what you already told me:"
+        f"{facts_to_str(user_data)} You can tell me more, or change your opinion"
+        " on something.",
+        reply_markup=markup,
+    )
+
+    return CHOOSING
+
+
+def done(update: Update, context: CallbackContext) -> int:
+    """Display the gathered info and end the conversation."""
+    user_data = context.user_data
+    if 'choice' in user_data:
+        del user_data['choice']
+
+    update.message.reply_text(
+        f"I learned these facts about you: {facts_to_str(user_data)}Until next time!",
+        reply_markup=ReplyKeyboardRemove(),
     )
 
     user_data.clear()
-
-    return ConversationHandler.END
-
-
-def cancel(update: Update, context: CallbackContext) -> int:
-    """Cancels and ends the conversation."""
-    user = update.message.from_user
-    logger.info("User %s canceled the conversation.", user.first_name)
-    update.message.reply_text(
-        'Ну ладно, пока.', reply_markup=ReplyKeyboardRemove()
-    )
-
     return ConversationHandler.END
 
 
 def main() -> None:
     """Run the bot."""
     # Create the Updater and pass it your bot's token.
-    updater = Updater(BOT_TOKEN)
+    updater = Updater("TOKEN")
 
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
 
-    # Add conversation handler with the states GENDER, PHOTO, LOCATION and BIO
+    # Add conversation handler with the states CHOOSING, TYPING_CHOICE and TYPING_REPLY
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            NEW: [MessageHandler(Filters.regex('^(Давай)$'), new)],
-            ADDRESS: [MessageHandler(Filters.text & ~Filters.command, address)],
-            TASK: [MessageHandler(Filters.text, task)],
-            PHONE: [
-                MessageHandler(Filters.text & ~Filters.command, phone),
-                CommandHandler('skip', skip_phone),
+            CHOOSING: [
+                MessageHandler(
+                    Filters.regex('^(Age|Favourite colour|Number of siblings)$'), regular_choice
+                ),
+                MessageHandler(Filters.regex('^Something else...$'), custom_choice),
             ],
-            PRICE: [MessageHandler(Filters.text & ~Filters.command, price)],
+            TYPING_CHOICE: [
+                MessageHandler(
+                    Filters.text & ~(Filters.command | Filters.regex('^Done$')), regular_choice
+                )
+            ],
+            TYPING_REPLY: [
+                MessageHandler(
+                    Filters.text & ~(Filters.command | Filters.regex('^Done$')),
+                    received_information,
+                )
+            ],
         },
-        fallbacks=[CommandHandler('cancel', cancel)],
+        fallbacks=[MessageHandler(Filters.regex('^Done$'), done)],
     )
 
     dispatcher.add_handler(conv_handler)
