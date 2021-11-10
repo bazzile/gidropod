@@ -31,7 +31,8 @@ from config import (
     BOT_TOKEN,
     PORT,
     GOOGLE_BOT_PKEY,
-    ORDERS_DOCUMENT_ID
+    ORDERS_DOCUMENT_ID,
+    ENV_IS_SERVER
 )
 
 heroku_app_name = 'gidropod'
@@ -42,6 +43,8 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+logger.info(BOT_TOKEN)
 
 CHOOSING, TYPING_REPLY, TYPING_CHOICE = range(3)
 
@@ -124,7 +127,7 @@ def done(update: Update, context: CallbackContext) -> int:
 def main() -> None:
     """Run the bot."""
     # Create the Updater and pass it your bot's token.
-    updater = Updater("TOKEN")
+    updater = Updater(BOT_TOKEN)
 
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
@@ -157,15 +160,16 @@ def main() -> None:
     dispatcher.add_handler(conv_handler)
 
     # # Start the Bot
-    # updater.start_polling()
-
-    # Start the webhook
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=BOT_TOKEN,
-        webhook_url=f"https://{heroku_app_name}.herokuapp.com/{BOT_TOKEN}")
-    updater.idle()
+    if ENV_IS_SERVER:  # running on server
+        # Start the webhook
+        updater.start_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=BOT_TOKEN,
+            webhook_url=f"https://{heroku_app_name}.herokuapp.com/{BOT_TOKEN}")
+        updater.idle()
+    else:  # running locally
+        updater.start_polling()
     logger.info('Bot started successfully')
 
 
