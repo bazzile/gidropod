@@ -32,6 +32,7 @@ from config import (
     PORT,
     GOOGLE_BOT_PKEY,
     ORDERS_DOCUMENT_ID,
+    ORDER_FORM_URL,
     ENV_IS_SERVER
 )
 
@@ -46,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 logger.info(BOT_TOKEN)
 
-CHOOSING, TYPING_REPLY, TYPING_CHOICE = range(3)
+CREATE_ORDER, CHOOSING, TYPING_REPLY, TYPING_CHOICE = range(4)
 
 reply_keyboard = [
     ['Age', 'Favourite colour'],
@@ -65,12 +66,38 @@ def facts_to_str(user_data: Dict[str, str]) -> str:
 def start(update: Update, context: CallbackContext) -> int:
     """Start the conversation and ask user for input."""
     update.message.reply_text(
-        "Hi! My name is Doctor Botter. I will hold a more complex conversation with you. "
-        "Why don't you tell me something about yourself?",
-        reply_markup=markup,
+        f"Привет! Добавь заказ через форму {ORDER_FORM_URL}\nзатем - жми 'Далее'",
+        reply_markup=ReplyKeyboardMarkup([['Далее'], ['Отмена']], one_time_keyboard=True)
     )
 
-    return CHOOSING
+    return CREATE_ORDER
+
+
+def poll(update: Update, context: CallbackContext) -> None:
+    """Sends a predefined poll"""
+    questions = ["Железнов Сергей Александрович", "Лобанов Василий Константинович",
+                 "1Железнов Сергей Александрович", "1Лобанов Василий Константинович",
+                 "2Железнов Сергей Александрович", "2Лобанов Василий Константинович",
+                 "3Железнов Сергей Александрович", "3Лобанов Василий Константинович",
+                 "4Железнов Сергей Александрович", "4Лобанов Василий Константинович",
+                 "5Железнов Сергей Александрович", "5Лобанов Василий Константинович"]
+    message = context.bot.send_poll(
+        update.effective_chat.id,
+        "Кто поедет?",
+        questions,
+        is_anonymous=False,
+        allows_multiple_answers=True,
+    )
+    # Save some info about the poll the bot_data for later use in receive_poll_answer
+    payload = {
+        message.poll.id: {
+            "questions": questions,
+            "message_id": message.message_id,
+            "chat_id": update.effective_chat.id,
+            "answers": 0,
+        }
+    }
+    context.bot_data.update(payload)
 
 
 def regular_choice(update: Update, context: CallbackContext) -> int:
@@ -136,6 +163,8 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
+            CREATE_ORDER: [MessageHandler(
+                    Filters.regex('^(Далее)$') & ~(Filters.command | Filters.regex('^Отмена')), poll)],
             CHOOSING: [
                 MessageHandler(
                     Filters.regex('^(Age|Favourite colour|Number of siblings)$'), regular_choice
@@ -154,7 +183,7 @@ def main() -> None:
                 )
             ],
         },
-        fallbacks=[MessageHandler(Filters.regex('^Done$'), done)],
+        fallbacks=[MessageHandler(Filters.regex('^Отмена'), done)],
     )
 
     dispatcher.add_handler(conv_handler)
@@ -169,6 +198,7 @@ def main() -> None:
             webhook_url=f"https://{heroku_app_name}.herokuapp.com/{BOT_TOKEN}")
         updater.idle()
     else:  # running locally
+        logger.info('Running locally...')
         updater.start_polling()
     logger.info('Bot started successfully')
 
