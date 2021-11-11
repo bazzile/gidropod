@@ -49,8 +49,6 @@ logger.info(BOT_TOKEN)
 
 # Stages
 ADD_ORDER_STAGE, REVIEW_ORDER_STAGE, ASSIGN_OPERATORS_STAGE = range(3)
-# Callback data
-ONE, TWO, THREE, FOUR = range(4)
 
 
 order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
