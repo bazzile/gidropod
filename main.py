@@ -15,7 +15,6 @@ bot.
 """
 
 import logging
-from typing import Dict
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -49,7 +48,7 @@ logger = logging.getLogger(__name__)
 logger.info(BOT_TOKEN)
 
 # Stages
-FIRST, SECOND, THIRD = range(3)
+ADD_ORDER_STAGE, REVIEW_ORDER_STAGE, ASSIGN_OPERATORS_STAGE = range(3)
 # Callback data
 ONE, TWO, THREE, FOUR = range(4)
 
@@ -82,28 +81,10 @@ def start(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         f"Привет!\nНе забудь добавить заказ, прежде чем выбрать операторов:\n{ORDER_FORM_URL}", reply_markup=reply_markup)
     # Tell ConversationHandler that we're in state `FIRST` now
-    return FIRST
+    return ADD_ORDER_STAGE
 
 
-# def one(update: Update, context: CallbackContext) -> int:
-#     """Show new choice of buttons"""
-#     query = update.callback_query
-#     query.answer()
-#
-#     keyboard = [[
-#         InlineKeyboardButton("Выбрать операторов", callback_data=str("select")),
-#         InlineKeyboardButton("Отмена", callback_data=str("cancel")),
-#     ]]
-#
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-#     query.edit_message_text(
-#         text="Заказ:", reply_markup=reply_markup
-#     )
-#     # Transfer to conversation state `SECOND`
-#     return THIRD
-
-
-def two(update: Update, context: CallbackContext) -> int:
+def review_order(update: Update, context: CallbackContext) -> int:
     """Show new choice of buttons"""
     query = update.callback_query
     query.answer()
@@ -121,10 +102,10 @@ def two(update: Update, context: CallbackContext) -> int:
     query.edit_message_text(
         text=f"Заказ:\n{last_order}", reply_markup=reply_markup
     )
-    return SECOND
+    return REVIEW_ORDER_STAGE
 
 
-def three(update: Update, context: CallbackContext) -> int:
+def assign_operators(update: Update, context: CallbackContext) -> int:
     """Show new choice of buttons"""
     query = update.callback_query
     query.answer()
@@ -135,14 +116,6 @@ def three(update: Update, context: CallbackContext) -> int:
         selected_person = query.data
 
     logger.info('DATA: ' + str(selected_person))
-
-    # for item in d:
-    #     if item['id'] == int(selected_person):
-    #         item['Selected'] = not item['Selected']
-    #         if item['Name'].startswith('+'):
-    #             item['Name'] = item['Name'].replace('+', '')
-    #         else:
-    #             item['Name'] = '+' + item['Name']
 
     for operator in operators:
         if operator['telegram_id'] == int(selected_person):
@@ -163,7 +136,7 @@ def three(update: Update, context: CallbackContext) -> int:
     query.edit_message_text(
         text="Операторы:", reply_markup=reply_markup
     )
-    return THIRD
+    return ASSIGN_OPERATORS_STAGE
 
 
 def end(update: Update, context: CallbackContext) -> int:
@@ -210,16 +183,16 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            FIRST: [
-                CallbackQueryHandler(two, pattern='^(task)$'),
+            ADD_ORDER_STAGE: [
+                CallbackQueryHandler(review_order, pattern='^(task)$'),
                 CallbackQueryHandler(cancel, pattern='^(cancel)$'),
             ],
-            SECOND: [
-                CallbackQueryHandler(three, pattern='^(select)$'),
+            REVIEW_ORDER_STAGE: [
+                CallbackQueryHandler(assign_operators, pattern='^(select)$'),
                 CallbackQueryHandler(cancel, pattern='^(cancel)$'),
             ],
-            THIRD: [
-                CallbackQueryHandler(three, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
+            ASSIGN_OPERATORS_STAGE: [
+                CallbackQueryHandler(assign_operators, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
                 CallbackQueryHandler(end, pattern='^(done)$'),
                 CallbackQueryHandler(cancel, pattern='^(cancel)$'),
             ],
