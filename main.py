@@ -190,7 +190,7 @@ def get_orders_table(update: Update, _: CallbackContext):
             f'[Таблица заказов]({ORDERS_TABLE_URL})',
             parse_mode='markdown')
     else:
-        logger.info("User %s is NOT a dispatcher, refusing to place an order", user.first_name)
+        logger.info("User %s is NOT a dispatcher, refusing to show orders", user.first_name)
         update.message.reply_text(
             'Заказы может просматривать только диспетчер.\n'
             'Обратитесь к [Сергею Железнову](tg://user?id=279777025)',
@@ -229,13 +229,8 @@ def ask(context: CallbackContext, chat_id):
 
     except telegram.error.BadRequest:
         logger.info(f'Chat id {chat_id} does not exist. Double-check it')
-        operator = active_order.get_next_operator()
-        if operator:
-            ask(context, operator)
-        else:
-            #  Todo: reply dispatcher about no responses
-            logger.info('No operators left in the queue')
-            pass
+        operator_id = active_order.get_next_operator()
+        pass_order_to_next_operator(context, operator_id)
     # return message.message_id
 
 
@@ -252,18 +247,22 @@ def button(update: Update, context: CallbackContext) -> None:
     if query.data == '0':
         query.edit_message_text(text=f"Вы отказались от заказа, его передадут другому")
         # ask next user
-        operator = active_order.get_next_operator()
-        if operator:
-            ask(context, operator)
-        else:
-            #  Todo: reply dispatcher about no responses
-            logger.info('No operators left in the queue')
-            pass
+        operator_id = active_order.get_next_operator()
+        pass_order_to_next_operator(context, operator_id)
 
     elif query.data == '1':
         query.edit_message_text(text=f"Вы приняли заказ")
         active_order.timer.cancel()
         logger.info('Timer was canceled')
+
+
+def pass_order_to_next_operator(context: CallbackContext, operator_id):
+    if operator_id:
+        ask(context, operator_id)
+    else:
+        #  Todo: reply dispatcher about no responses
+        logger.info('No operators left in the queue')
+        pass
 
 
 def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:
@@ -272,25 +271,12 @@ def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:
                                 text="Заказ не принят во время")
     # ask next user
     global active_order
-    operator = active_order.get_next_operator()
-    if operator:
-        ask(context, operator)
-    else:
-        #  Todo: reply dispatcher about no responses
-        logger.info('No operators left in the queue')
-        pass
+    operator_id = active_order.get_next_operator()
+    pass_order_to_next_operator(context, operator_id)
 
 
 def unknown_command(update: Update, _: CallbackContext):
     update.message.reply_text('Неверная команда. Список доступных команд - в меню')
-
-# def ask(msg, chat_id, token=my_token):
-# 	"""
-# 	Send a mensage to a telegram user specified on chatId
-# 	chat_id must be a number!
-# 	"""
-# 	bot = telegram.Bot(token=token)
-# 	bot.sendMessage(chat_id=chat_id, text=msg)
 
 
 def main() -> None:
