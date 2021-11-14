@@ -79,8 +79,8 @@ def new_order(update: Update, _: CallbackContext) -> int:
         operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
 
         keyboard = [[
-            InlineKeyboardButton("Посмотреть заказ", callback_data=str("task")),
-            InlineKeyboardButton("Отмена", callback_data=str("cancel_order")),
+            InlineKeyboardButton("✅ Посмотреть заказ", callback_data=str("task")),
+            InlineKeyboardButton("❌ Отмена", callback_data=str("cancel_order")),
         ]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -103,8 +103,8 @@ def review_order(update: Update, context: CallbackContext) -> int:
     query.answer()
 
     keyboard = [[
-        InlineKeyboardButton("Выбрать операторов", callback_data=str("select")),
-        InlineKeyboardButton("Отмена", callback_data=str("cancel_order")),
+        InlineKeyboardButton("✅ Выбрать операторов", callback_data=str("select")),
+        InlineKeyboardButton("❌ Отмена", callback_data=str("cancel_order")),
     ]]
 
     global active_order
@@ -134,16 +134,16 @@ def assign_operators(update: Update, context: CallbackContext) -> int:
     for operator in operators:
         if operator['telegram_id'] == int(selected_person):
             operator['Selected'] = not operator['Selected']
-            if operator['DisplayName'].startswith('✅ '):
-                operator['DisplayName'] = operator['DisplayName'].replace('✅ ', '')
+            if operator['DisplayName'].startswith('👨🏿 '):
+                operator['DisplayName'] = operator['DisplayName'].replace('👨🏿 ', '')
             else:
-                operator['DisplayName'] = '✅ ' + operator['DisplayName']
+                operator['DisplayName'] = '👨🏿 ' + operator['DisplayName']
 
     operator_buttons = [
         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
     control_buttons = [
-        InlineKeyboardButton("Назначить", callback_data=str("done")),
-        InlineKeyboardButton("Отмена", callback_data=str("cancel_order"))]
+        InlineKeyboardButton("✅ Назначить", callback_data=str("done")),
+        InlineKeyboardButton("❌ Отмена", callback_data=str("cancel_order"))]
 
     keyboard = [[button] for button in operator_buttons] + [control_buttons]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -160,20 +160,23 @@ def end(update: Update, context: CallbackContext) -> int:
     """
     global operators
     selected_operators = [operator for operator in operators if operator['Selected']]
-    # selected_operators = [operator['ФИО'] for operator in operators if operator['Selected']]
-
     query = update.callback_query
     query.answer()
-    query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(
-        operator['ФИО'] for operator in selected_operators)))
 
-    # operators = [operator['telegram_id'] for operator in selected_operators]
-    global active_order
-    active_order.set_operators(selected_operators)
-    operator = active_order.get_next_operator()
-    ask(context, operator)
+    if selected_operators:
 
-    return ConversationHandler.END
+        query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(
+            operator['ФИО'] for operator in selected_operators)))
+
+        # operators = [operator['telegram_id'] for operator in selected_operators]
+        global active_order
+        active_order.set_operators(selected_operators)
+        operator = active_order.get_next_operator()
+        ask(context, operator)
+
+        return ConversationHandler.END
+    else:
+        return ASSIGN_OPERATORS_STAGE
 
 
 def get_orders_table(update: Update, _: CallbackContext):
@@ -190,7 +193,7 @@ def get_orders_table(update: Update, _: CallbackContext):
             parse_mode='markdown')
 
 
-def cancel_order(update: Update, context: CallbackContext) -> int:
+def cancel_order(update: Update, _: CallbackContext) -> int:
     """Returns `ConversationHandler.END`, which tells the
     ConversationHandler that the conversation is over.
     """
@@ -240,13 +243,13 @@ def button(update: Update, context: CallbackContext) -> None:
 
     # query.edit_message_text(text=f"Selected option: {query.data}")
     if query.data == '0':
-        query.edit_message_text(text=f"Вы отказались от заказа, его передадут другому")
+        query.edit_message_text(text=f"❌ Вы отказались от заказа, его передадут другому")
         # ask next user
         operator = active_order.get_next_operator()
         pass_order_to_next_operator(context, operator)
 
     elif query.data == '1':
-        query.edit_message_text(text=f"Вы приняли заказ")
+        query.edit_message_text(text=f"✅ Вы приняли заказ")
         active_order.timer.cancel()
         logger.info('Order picked within set time, timer was canceled')
         logger.info('Reporting to dispatcher')
