@@ -1,5 +1,6 @@
 import gspread
 import ast
+import json
 import logging
 
 # Enable logging
@@ -35,6 +36,25 @@ class OrderUpdater(object):
         logger.info(f'Fetched operators: {len(operators)}')
 
         return operators
+
+
+class ActiveOrder(object):
+    def __init__(self, order_dict):
+        # self.operator_list = operator_list
+        self.order = order_dict
+        self.operator_list = None
+
+    # def start_polling(self, timer_sec):
+    #     for operator in self.operator_list:
+
+    def format_order(self):
+        return ",\n".join(": ".join((str(k), str(v))) for k, v in self.order.items())
+
+    def set_operators(self, operator_list):
+        self.operator_list = operator_list
+
+    def get_next_operator(self):
+        return self.operator_list.pop(0)
 
 
 # order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
