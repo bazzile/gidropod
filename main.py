@@ -68,7 +68,7 @@ global active_order
 def new_order(update: Update, _: CallbackContext) -> int:
     user = update.message.from_user
     logger.info("User %s started the conversation.", user.first_name)
-    if user.id in DISPATCHER_TELEGRAM_ID:
+    if user.id == DISPATCHER_TELEGRAM_ID:
         logger.info("User %s is a dispatcher", user.first_name)
         # logger.info(update.message.chat_id)
         # Build InlineKeyboard where each button has a displayed text
@@ -168,10 +168,6 @@ def end(update: Update, context: CallbackContext) -> int:
     query.answer()
     query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(
         operator['ФИО'] for operator in selected_operators)))
-    # ask(context, '279777025')
-    # ask(context, '256887570')
-    # propose_selected([operator['telegram_id'] for operator in operators])
-    # ask(context, [operator['telegram_id'] for operator in selected_operators][0])
 
     operators = [operator['telegram_id'] for operator in selected_operators]
     #  ToDo: pass full operator info, then subset to telegram_id when needed
@@ -185,7 +181,7 @@ def end(update: Update, context: CallbackContext) -> int:
 
 def get_orders_table(update: Update, _: CallbackContext):
     user = update.message.from_user.id
-    if user in DISPATCHER_TELEGRAM_ID:
+    if user.id == DISPATCHER_TELEGRAM_ID:
         update.message.reply_text(
             f'[Таблица заказов]({ORDERS_TABLE_URL})',
             parse_mode='markdown')
@@ -208,9 +204,6 @@ def cancel_order(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-# Define a few command handlers. These usually take the two arguments update and
-# context.
-# def ask(context: CallbackContext, chat_id):
 def ask(context: CallbackContext, chat_id):
 
     keyboard = [[
@@ -253,16 +246,24 @@ def button(update: Update, context: CallbackContext) -> None:
     elif query.data == '1':
         query.edit_message_text(text=f"Вы приняли заказ")
         active_order.timer.cancel()
-        logger.info('Timer was canceled')
+        logger.info('Order picked within set time, timer was canceled')
+        logger.info('Reporting to dispatcher')
+        context.bot.send_message(
+            chat_id=DISPATCHER_TELEGRAM_ID,
+            text=f'Заказ принят! Подробности:\n'
+                 f'{active_order.format_order()}\n'
+                 f'Заказ принял:\n'
+                 f'{active_order.current_operator}')
 
 
 def pass_order_to_next_operator(context: CallbackContext, operator_id):
     if operator_id:
         ask(context, operator_id)
     else:
-        #  Todo: reply dispatcher about no responses
-        logger.info('No operators left in the queue')
-        pass
+        logger.info('No operators left in the queue, reporting to dispatcher')
+        context.bot.send_message(
+            chat_id=DISPATCHER_TELEGRAM_ID,
+            text='Внимание! Заказ НЕ ПРИНЯТ ни одним из выбранных операторов')
 
 
 def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:

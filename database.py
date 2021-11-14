@@ -45,6 +45,7 @@ class ActiveOrder(object):
         self.order = order_dict
         self.operator_list = None
         self.timer = None
+        self.current_operator = None
 
     # def start_polling(self, timer_sec):
     #     for operator in self.operator_list:
@@ -57,7 +58,8 @@ class ActiveOrder(object):
 
     def get_next_operator(self):
         try:
-            return self.operator_list.pop(0)
+            self.current_operator = self.operator_list.pop(0)
+            return self.current_operator
         except IndexError:
             return None
 
