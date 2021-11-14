@@ -169,8 +169,7 @@ def end(update: Update, context: CallbackContext) -> int:
     query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(
         operator['ФИО'] for operator in selected_operators)))
 
-    operators = [operator['telegram_id'] for operator in selected_operators]
-    #  ToDo: pass full operator info, then subset to telegram_id when needed
+    # operators = [operator['telegram_id'] for operator in selected_operators]
     global active_order
     active_order.set_operators(operators)
     operator = active_order.get_next_operator()
@@ -204,7 +203,9 @@ def cancel_order(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-def ask(context: CallbackContext, chat_id):
+def ask(context: CallbackContext, operator):
+
+    operator_id = operator['telegram_id']
 
     keyboard = [[
         InlineKeyboardButton("Уже лечу", callback_data=str("1")),
@@ -215,15 +216,15 @@ def ask(context: CallbackContext, chat_id):
 
     try:
         message = context.bot.send_message(
-            chat_id=chat_id, text=f'Псс-c, работа есть!\n{active_order.format_order()}', reply_markup=reply_markup)
+            chat_id=operator_id, text=f'Псс-c, работа есть!\n{active_order.format_order()}', reply_markup=reply_markup)
 
-        timer = threading.Timer(ORDER_RESPONSE_TIME, timeout_proposal, [context, chat_id, message.message_id])
+        timer = threading.Timer(ORDER_RESPONSE_TIME, timeout_proposal, [context, operator_id, message.message_id])
         active_order.set_timer(timer)
 
     except telegram.error.BadRequest:
-        logger.info(f'Chat id {chat_id} does not exist. Double-check it')
-        operator_id = active_order.get_next_operator()
-        pass_order_to_next_operator(context, operator_id)
+        logger.info(f'Chat id {operator_id} does not exist. Double-check it')
+        operator = active_order.get_next_operator()
+        pass_order_to_next_operator(context, operator)
     # return message.message_id
 
 
@@ -240,8 +241,8 @@ def button(update: Update, context: CallbackContext) -> None:
     if query.data == '0':
         query.edit_message_text(text=f"Вы отказались от заказа, его передадут другому")
         # ask next user
-        operator_id = active_order.get_next_operator()
-        pass_order_to_next_operator(context, operator_id)
+        operator = active_order.get_next_operator()
+        pass_order_to_next_operator(context, operator)
 
     elif query.data == '1':
         query.edit_message_text(text=f"Вы приняли заказ")
@@ -251,14 +252,14 @@ def button(update: Update, context: CallbackContext) -> None:
         context.bot.send_message(
             chat_id=DISPATCHER_TELEGRAM_ID,
             text=f'Заказ принят! Подробности:\n'
-                 f'{active_order.format_order()}\n'
+                 f'{active_order.format_order()}\n\n'
                  f'Заказ принял:\n'
-                 f'{active_order.current_operator}')
+                 f'{active_order.current_operator["ФИО"]}')
 
 
-def pass_order_to_next_operator(context: CallbackContext, operator_id):
-    if operator_id:
-        ask(context, operator_id)
+def pass_order_to_next_operator(context: CallbackContext, operator):
+    if operator:
+        ask(context, operator)
     else:
         logger.info('No operators left in the queue, reporting to dispatcher')
         context.bot.send_message(
@@ -272,8 +273,8 @@ def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:
                                 text="Заказ не принят во время")
     # ask next user
     global active_order
-    operator_id = active_order.get_next_operator()
-    pass_order_to_next_operator(context, operator_id)
+    operator = active_order.get_next_operator()
+    pass_order_to_next_operator(context, operator)
 
 
 def unknown_command(update: Update, _: CallbackContext):

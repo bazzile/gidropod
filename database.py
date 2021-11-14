@@ -25,9 +25,11 @@ class OrderUpdater(object):
 
     def get_last_order(self):
         orders = self.orders_sheet.get_all_records()
+
         logger.info(f'Fetched orders: {len(orders)}')
 
         last_order = orders[-1]
+        last_order.pop('Отметка времени', None)
         logger.info(f'Last order: {last_order}')
 
         return last_order
