@@ -23,9 +23,14 @@ from telegram.ext import (
     CallbackQueryHandler,
     ConversationHandler,
     CallbackContext,
+    InlineQueryHandler,
+    MessageHandler
 )
 
-from database import OrderUpdater
+import time
+import threading
+
+from database import OrderUpdater, ActiveOrder
 
 from config import (
     BOT_TOKEN,
@@ -45,7 +50,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-logger.info(BOT_TOKEN)
 
 # Stages
 ADD_ORDER_STAGE, REVIEW_ORDER_STAGE, ASSIGN_OPERATORS_STAGE = range(3)
@@ -53,6 +57,7 @@ ADD_ORDER_STAGE, REVIEW_ORDER_STAGE, ASSIGN_OPERATORS_STAGE = range(3)
 
 order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
 global operators
+global active_order
 
 
 def start(update: Update, context: CallbackContext) -> int:
@@ -60,6 +65,7 @@ def start(update: Update, context: CallbackContext) -> int:
     # Get user that sent /start and log his name
     user = update.message.from_user
     logger.info("User %s started the conversation.", user.first_name)
+    # logger.info(update.message.chat_id)
     # Build InlineKeyboard where each button has a displayed text
     # and a string as callback_data
     # The keyboard is a list of button rows, where each row is in turn
@@ -92,13 +98,14 @@ def review_order(update: Update, context: CallbackContext) -> int:
         InlineKeyboardButton("Отмена", callback_data=str("cancel")),
     ]]
 
-    last_order = order_updater.get_last_order()
-    last_order = ",\n".join("=".join((str(k), str(v))) for k, v in last_order.items())
-    logger.info(last_order)
+    global active_order
+    active_order = ActiveOrder(order_updater.get_last_order())
+    formatted_order = active_order.format_order()
+    logger.info(formatted_order)
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.edit_message_text(
-        text=f"Заказ:\n{last_order}", reply_markup=reply_markup
+        text=f"Заказ:\n{formatted_order}", reply_markup=reply_markup
     )
     return REVIEW_ORDER_STAGE
 
@@ -134,6 +141,7 @@ def assign_operators(update: Update, context: CallbackContext) -> int:
     query.edit_message_text(
         text="Операторы:", reply_markup=reply_markup
     )
+
     return ASSIGN_OPERATORS_STAGE
 
 
@@ -142,11 +150,25 @@ def end(update: Update, context: CallbackContext) -> int:
     ConversationHandler that the conversation is over.
     """
     global operators
-    selected_operators = [operator['ФИО'] for operator in operators if operator['Selected']]
+    selected_operators = [operator for operator in operators if operator['Selected']]
+    # selected_operators = [operator['ФИО'] for operator in operators if operator['Selected']]
 
     query = update.callback_query
     query.answer()
-    query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(selected_operators)))
+    query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(
+        operator['ФИО'] for operator in selected_operators)))
+    # ask(context, '279777025')
+    # ask(context, '256887570')
+    # propose_selected([operator['telegram_id'] for operator in operators])
+    # ask(context, [operator['telegram_id'] for operator in selected_operators][0])
+
+    operators = [operator['telegram_id'] for operator in selected_operators]
+    #  ToDo: pass full operator info, then subset to telegram_id when needed
+    global active_order
+    active_order.set_operators(operators)
+
+    poll_the_order(context, 5, active_order.operator_list)
+
     return ConversationHandler.END
 
 
@@ -159,6 +181,58 @@ def cancel(update: Update, context: CallbackContext) -> int:
     query.answer()
     query.edit_message_text(text="Отмена. На заказ никто не выбран")
     return ConversationHandler.END
+
+
+def poll_the_order(context: CallbackContext, timer_secs, selected_operators):
+    # def timer(timer_start, secs):
+    #     return timer_start + secs < time.time()
+    for operator in selected_operators:
+        msg_id = ask(context, operator)
+        # timer = threading.Timer(timer_secs, timeout_proposal, [context, operator, msg_id])
+        # timer.start()
+
+
+# Define a few command handlers. These usually take the two arguments update and
+# context.
+# def ask(context: CallbackContext, chat_id):
+def ask(context: CallbackContext, chat_id):
+
+    keyboard = [[
+        InlineKeyboardButton("Уже лечу", callback_data=str("1")),
+        InlineKeyboardButton("Я в запое, отмена", callback_data=str("0")),
+    ]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    message = context.bot.send_message(chat_id=chat_id, text='Псс-c, работа есть!', reply_markup=reply_markup)
+
+    return message.message_id
+
+
+def button(update: Update, _: CallbackContext) -> None:
+    query = update.callback_query
+
+    # CallbackQueries need to be answered, even if no notification to the user is needed
+    # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
+    query.answer()
+
+    query.edit_message_text(text=f"Selected option: {query.data}")
+    if query.data == '0':
+        pass
+    elif query.data == '1':
+        # ask next user
+        pass
+
+
+def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:
+    context.bot.editMessageText(chat_id=chat_id,
+                                message_id=message_id,
+                                text="Заказ не принят во время")
+# def ask(msg, chat_id, token=my_token):
+# 	"""
+# 	Send a mensage to a telegram user specified on chatId
+# 	chat_id must be a number!
+# 	"""
+# 	bot = telegram.Bot(token=token)
+# 	bot.sendMessage(chat_id=chat_id, text=msg)
 
 
 def main() -> None:
@@ -200,6 +274,7 @@ def main() -> None:
     )
 
     dispatcher.add_handler(conv_handler)
+    dispatcher.add_handler(CallbackQueryHandler(button))
 
     # # Start the Bot
     if ENV_IS_SERVER:  # running on server
