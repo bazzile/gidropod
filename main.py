@@ -16,6 +16,7 @@ bot.
 
 import logging
 
+import telegram.error
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Updater,
@@ -38,7 +39,8 @@ from config import (
     GOOGLE_BOT_PKEY,
     ORDERS_DOCUMENT_ID,
     ORDER_FORM_URL,
-    ENV_IS_SERVER
+    ENV_IS_SERVER,
+    ORDER_RESPONSE_TIME
 )
 
 heroku_app_name = 'gidropod'
@@ -210,10 +212,23 @@ def ask(context: CallbackContext, chat_id):
     reply_markup = InlineKeyboardMarkup(keyboard)
     global active_order
 
-    message = context.bot.send_message(
-        chat_id=chat_id, text=f'Псс-c, работа есть!\n{active_order.format_order()}', reply_markup=reply_markup)
+    try:
+        message = context.bot.send_message(
+            chat_id=chat_id, text=f'Псс-c, работа есть!\n{active_order.format_order()}', reply_markup=reply_markup)
 
-    return message.message_id
+        timer = threading.Timer(ORDER_RESPONSE_TIME, timeout_proposal, [context, chat_id, message.message_id])
+        active_order.set_timer(timer)
+
+    except telegram.error.BadRequest:
+        logger.info(f'Chat id {chat_id} does not exist. Double-check it')
+        operator = active_order.get_next_operator()
+        if operator:
+            ask(context, operator)
+        else:
+            #  Todo: reply dispatcher about no responses
+            logger.info('No operators left in the queue')
+            pass
+    # return message.message_id
 
 
 def button(update: Update, context: CallbackContext) -> None:
@@ -223,11 +238,12 @@ def button(update: Update, context: CallbackContext) -> None:
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
     query.answer()
 
+    global active_order
+
     # query.edit_message_text(text=f"Selected option: {query.data}")
     if query.data == '0':
         query.edit_message_text(text=f"Вы отказались от заказа, его передадут другому")
         # ask next user
-        global active_order
         operator = active_order.get_next_operator()
         if operator:
             ask(context, operator)
@@ -238,13 +254,23 @@ def button(update: Update, context: CallbackContext) -> None:
 
     elif query.data == '1':
         query.edit_message_text(text=f"Вы приняли заказ")
-
+        active_order.timer.cancel()
+        logger.info('Timer was canceled')
 
 
 def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:
     context.bot.editMessageText(chat_id=chat_id,
                                 message_id=message_id,
                                 text="Заказ не принят во время")
+    # ask next user
+    global active_order
+    operator = active_order.get_next_operator()
+    if operator:
+        ask(context, operator)
+    else:
+        #  Todo: reply dispatcher about no responses
+        logger.info('No operators left in the queue')
+        pass
 # def ask(msg, chat_id, token=my_token):
 # 	"""
 # 	Send a mensage to a telegram user specified on chatId

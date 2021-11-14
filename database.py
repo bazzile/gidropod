@@ -2,6 +2,7 @@ import gspread
 import ast
 import json
 import logging
+import threading
 
 # Enable logging
 logging.basicConfig(
@@ -43,6 +44,7 @@ class ActiveOrder(object):
         # self.operator_list = operator_list
         self.order = order_dict
         self.operator_list = None
+        self.timer = None
 
     # def start_polling(self, timer_sec):
     #     for operator in self.operator_list:
@@ -58,6 +60,10 @@ class ActiveOrder(object):
             return self.operator_list.pop(0)
         except IndexError:
             return None
+
+    def set_timer(self, timer):
+        self.timer = timer
+        timer.start()
 
 
 # order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
