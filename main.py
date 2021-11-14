@@ -166,8 +166,8 @@ def end(update: Update, context: CallbackContext) -> int:
     #  ToDo: pass full operator info, then subset to telegram_id when needed
     global active_order
     active_order.set_operators(operators)
-
-    poll_the_order(context, 5, active_order.operator_list)
+    operator = active_order.get_next_operator()
+    ask(context, operator)
 
     return ConversationHandler.END
 
@@ -183,11 +183,17 @@ def cancel(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-def poll_the_order(context: CallbackContext, timer_secs, selected_operators):
-    # def timer(timer_start, secs):
-    #     return timer_start + secs < time.time()
-    for operator in selected_operators:
-        msg_id = ask(context, operator)
+# def poll_the_order(context: CallbackContext, timer_secs, selected_operators):
+#     # def timer(timer_start, secs):
+#     #     return timer_start + secs < time.time()
+#     global active_order
+#     operator_list = active_order.operator_list
+#     while len(operator_list) > 0:
+#         logger.info(f'Operators in queue: {len(operator_list)}')
+#         operator = operator_list.get_next_operator()
+#         ask(context, operator)
+    # for operator in selected_operators:
+    #     msg_id = ask(context, operator)
         # timer = threading.Timer(timer_secs, timeout_proposal, [context, operator, msg_id])
         # timer.start()
 
@@ -202,24 +208,37 @@ def ask(context: CallbackContext, chat_id):
         InlineKeyboardButton("Я в запое, отмена", callback_data=str("0")),
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    message = context.bot.send_message(chat_id=chat_id, text='Псс-c, работа есть!', reply_markup=reply_markup)
+    global active_order
+
+    message = context.bot.send_message(
+        chat_id=chat_id, text=f'Псс-c, работа есть!\n{active_order.format_order()}', reply_markup=reply_markup)
 
     return message.message_id
 
 
-def button(update: Update, _: CallbackContext) -> None:
+def button(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
 
     # CallbackQueries need to be answered, even if no notification to the user is needed
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
     query.answer()
 
-    query.edit_message_text(text=f"Selected option: {query.data}")
+    # query.edit_message_text(text=f"Selected option: {query.data}")
     if query.data == '0':
-        pass
-    elif query.data == '1':
+        query.edit_message_text(text=f"Вы отказались от заказа, его передадут другому")
         # ask next user
-        pass
+        global active_order
+        operator = active_order.get_next_operator()
+        if operator:
+            ask(context, operator)
+        else:
+            #  Todo: reply dispatcher about no responses
+            logger.info('No operators left in the queue')
+            pass
+
+    elif query.data == '1':
+        query.edit_message_text(text=f"Вы приняли заказ")
+
 
 
 def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:

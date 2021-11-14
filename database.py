@@ -54,7 +54,10 @@ class ActiveOrder(object):
         self.operator_list = operator_list
 
     def get_next_operator(self):
-        return self.operator_list.pop(0)
+        try:
+            return self.operator_list.pop(0)
+        except IndexError:
+            return None
 
 
 # order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
