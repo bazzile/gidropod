@@ -40,7 +40,8 @@ from config import (
     ORDERS_DOCUMENT_ID,
     ORDER_FORM_URL,
     ENV_IS_SERVER,
-    ORDER_RESPONSE_TIME
+    ORDER_RESPONSE_TIME,
+    DISPATCHER_TELEGRAM_ID
 )
 
 heroku_app_name = 'gidropod'
@@ -62,7 +63,7 @@ global operators
 global active_order
 
 
-def start(update: Update, context: CallbackContext) -> int:
+def new_order(update: Update, context: CallbackContext) -> int:
     """Send message on `/start`."""
     # Get user that sent /start and log his name
     user = update.message.from_user
@@ -79,7 +80,7 @@ def start(update: Update, context: CallbackContext) -> int:
 
     keyboard = [[
         InlineKeyboardButton("Посмотреть заказ", callback_data=str("task")),
-        InlineKeyboardButton("Отмена", callback_data=str("cancel")),
+        InlineKeyboardButton("Отмена", callback_data=str("cancel_order")),
     ]]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -97,7 +98,7 @@ def review_order(update: Update, context: CallbackContext) -> int:
 
     keyboard = [[
         InlineKeyboardButton("Выбрать операторов", callback_data=str("select")),
-        InlineKeyboardButton("Отмена", callback_data=str("cancel")),
+        InlineKeyboardButton("Отмена", callback_data=str("cancel_order")),
     ]]
 
     global active_order
@@ -136,7 +137,7 @@ def assign_operators(update: Update, context: CallbackContext) -> int:
         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
     control_buttons = [
         InlineKeyboardButton("Назначить", callback_data=str("done")),
-        InlineKeyboardButton("Отмена", callback_data=str("cancel"))]
+        InlineKeyboardButton("Отмена", callback_data=str("cancel_order"))]
 
     keyboard = [[button] for button in operator_buttons] + [control_buttons]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -174,7 +175,7 @@ def end(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-def cancel(update: Update, context: CallbackContext) -> int:
+def cancel_order(update: Update, context: CallbackContext) -> int:
     """Returns `ConversationHandler.END`, which tells the
     ConversationHandler that the conversation is over.
     """
@@ -183,21 +184,6 @@ def cancel(update: Update, context: CallbackContext) -> int:
     query.answer()
     query.edit_message_text(text="Отмена. На заказ никто не выбран")
     return ConversationHandler.END
-
-
-# def poll_the_order(context: CallbackContext, timer_secs, selected_operators):
-#     # def timer(timer_start, secs):
-#     #     return timer_start + secs < time.time()
-#     global active_order
-#     operator_list = active_order.operator_list
-#     while len(operator_list) > 0:
-#         logger.info(f'Operators in queue: {len(operator_list)}')
-#         operator = operator_list.get_next_operator()
-#         ask(context, operator)
-    # for operator in selected_operators:
-    #     msg_id = ask(context, operator)
-        # timer = threading.Timer(timer_secs, timeout_proposal, [context, operator, msg_id])
-        # timer.start()
 
 
 # Define a few command handlers. These usually take the two arguments update and
@@ -298,24 +284,24 @@ def main() -> None:
     # $ means "end of line/string"
     # So ^ABC$ will only allow 'ABC'
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[CommandHandler('new_order', new_order)],
         states={
             ADD_ORDER_STAGE: [
                 CallbackQueryHandler(review_order, pattern='^(task)$'),
-                CallbackQueryHandler(cancel, pattern='^(cancel)$'),
+                CallbackQueryHandler(cancel_order, pattern='^(cancel_order)$'),
             ],
             REVIEW_ORDER_STAGE: [
                 CallbackQueryHandler(assign_operators, pattern='^(select)$'),
-                CallbackQueryHandler(cancel, pattern='^(cancel)$'),
+                CallbackQueryHandler(cancel_order, pattern='^(cancel_order)$'),
             ],
             ASSIGN_OPERATORS_STAGE: [
                 CallbackQueryHandler(assign_operators, pattern=f'^({"|".join(str(operator["telegram_id"]) for operator in operators)})$'),
                 CallbackQueryHandler(end, pattern='^(done)$'),
-                CallbackQueryHandler(cancel, pattern='^(cancel)$'),
+                CallbackQueryHandler(cancel_order, pattern='^(cancel_order)$'),
             ],
 
         },
-        fallbacks=[CommandHandler('start', start)],
+        fallbacks=[CommandHandler('cancel_order', cancel_order)],
     )
 
     dispatcher.add_handler(conv_handler)

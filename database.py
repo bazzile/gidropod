@@ -63,7 +63,7 @@ class ActiveOrder(object):
 
     def set_timer(self, timer):
         self.timer = timer
-        timer.start()
+        timer.new_order()
 
 
 # order_updater = OrderUpdater(ORDERS_DOCUMENT_ID, GOOGLE_BOT_PKEY)
