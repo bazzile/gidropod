@@ -25,7 +25,8 @@ from telegram.ext import (
     ConversationHandler,
     CallbackContext,
     InlineQueryHandler,
-    MessageHandler
+    MessageHandler,
+    Filters
 )
 
 import time
@@ -39,6 +40,7 @@ from config import (
     GOOGLE_BOT_PKEY,
     ORDERS_DOCUMENT_ID,
     ORDER_FORM_URL,
+    ORDERS_TABLE_URL,
     ENV_IS_SERVER,
     ORDER_RESPONSE_TIME,
     DISPATCHER_TELEGRAM_ID
@@ -63,32 +65,38 @@ global operators
 global active_order
 
 
-def new_order(update: Update, context: CallbackContext) -> int:
-    """Send message on `/start`."""
-    # Get user that sent /start and log his name
+def new_order(update: Update, _: CallbackContext) -> int:
     user = update.message.from_user
     logger.info("User %s started the conversation.", user.first_name)
-    # logger.info(update.message.chat_id)
-    # Build InlineKeyboard where each button has a displayed text
-    # and a string as callback_data
-    # The keyboard is a list of button rows, where each row is in turn
-    # a list (hence `[[...]]`).
+    if user.id in DISPATCHER_TELEGRAM_ID:
+        logger.info("User %s is a dispatcher", user.first_name)
+        # logger.info(update.message.chat_id)
+        # Build InlineKeyboard where each button has a displayed text
+        # and a string as callback_data
+        # The keyboard is a list of button rows, where each row is in turn
+        # a list (hence `[[...]]`).
 
-    global operators
-    operators = order_updater.get_operators()
-    operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
+        global operators
+        operators = order_updater.get_operators()
+        operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО']}) for item in operators]
 
-    keyboard = [[
-        InlineKeyboardButton("Посмотреть заказ", callback_data=str("task")),
-        InlineKeyboardButton("Отмена", callback_data=str("cancel_order")),
-    ]]
+        keyboard = [[
+            InlineKeyboardButton("Посмотреть заказ", callback_data=str("task")),
+            InlineKeyboardButton("Отмена", callback_data=str("cancel_order")),
+        ]]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    # Send message with text and appended InlineKeyboard
-    update.message.reply_text(
-        f"Привет!\nНе забудь добавить заказ, прежде чем выбрать операторов:\n{ORDER_FORM_URL}", reply_markup=reply_markup)
-    # Tell ConversationHandler that we're in state `FIRST` now
-    return ADD_ORDER_STAGE
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        # Send message with text and appended InlineKeyboard
+        update.message.reply_text(
+            f"Привет!\nНе забудь добавить заказ, прежде чем выбрать операторов:\n{ORDER_FORM_URL}", reply_markup=reply_markup)
+        # Tell ConversationHandler that we're in state `FIRST` now
+        return ADD_ORDER_STAGE
+    else:
+        logger.info("User %s is NOT a dispatcher, refusing to place an order", user.first_name)
+        update.message.reply_text(
+            'Заказы может создавать только диспетчер.\n'
+            'Обратитесь к [Сергею Железнову](tg://user?id=279777025)',
+            parse_mode='markdown')
 
 
 def review_order(update: Update, context: CallbackContext) -> int:
@@ -175,6 +183,20 @@ def end(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
+def get_orders_table(update: Update, _: CallbackContext):
+    user = update.message.from_user.id
+    if user in DISPATCHER_TELEGRAM_ID:
+        update.message.reply_text(
+            f'[Таблица заказов]({ORDERS_TABLE_URL})',
+            parse_mode='markdown')
+    else:
+        logger.info("User %s is NOT a dispatcher, refusing to place an order", user.first_name)
+        update.message.reply_text(
+            'Заказы может просматривать только диспетчер.\n'
+            'Обратитесь к [Сергею Железнову](tg://user?id=279777025)',
+            parse_mode='markdown')
+
+
 def cancel_order(update: Update, context: CallbackContext) -> int:
     """Returns `ConversationHandler.END`, which tells the
     ConversationHandler that the conversation is over.
@@ -257,6 +279,11 @@ def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:
         #  Todo: reply dispatcher about no responses
         logger.info('No operators left in the queue')
         pass
+
+
+def unknown_command(update: Update, _: CallbackContext):
+    update.message.reply_text('Неверная команда. Список доступных команд - в меню')
+
 # def ask(msg, chat_id, token=my_token):
 # 	"""
 # 	Send a mensage to a telegram user specified on chatId
@@ -306,6 +333,8 @@ def main() -> None:
 
     dispatcher.add_handler(conv_handler)
     dispatcher.add_handler(CallbackQueryHandler(button))
+    dispatcher.add_handler(CommandHandler('get_orders_table', get_orders_table))
+    dispatcher.add_handler(MessageHandler(Filters.command, unknown_command))
 
     # # Start the Bot
     if ENV_IS_SERVER:  # running on server
