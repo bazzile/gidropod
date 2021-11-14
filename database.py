@@ -21,15 +21,19 @@ class OrderUpdater(object):
         self.orders_sheet = spreadsheet.get_worksheet(0)  # orders
         self.operators_sheet = spreadsheet.get_worksheet(1)  # operators
 
-        # self.operators = self.update_operators()
+        self.col_num = None
+        self.row_num = None
 
     def get_last_order(self):
         orders = self.orders_sheet.get_all_records()
+        self.row_num = len(orders)
+        self.col_num = len(orders[-1].keys())
 
         logger.info(f'Fetched orders: {len(orders)}')
 
         last_order = orders[-1]
         last_order.pop('Отметка времени', None)
+        last_order.pop('Оператор', None)
         logger.info(f'Last order: {last_order}')
 
         return last_order
@@ -39,6 +43,10 @@ class OrderUpdater(object):
         logger.info(f'Fetched operators: {len(operators)}')
 
         return operators
+
+    def write_to_table(self, operator):
+        logger.info(f'Writing selected operator to table: {operator["ФИО"]}')
+        self.orders_sheet.update_cell(self.row_num + 1, self.col_num, operator['ФИО'])
 
 
 class ActiveOrder(object):

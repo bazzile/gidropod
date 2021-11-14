@@ -261,6 +261,8 @@ def button(update: Update, context: CallbackContext) -> None:
                  f'Заказ принял:\n'
                  f'*{active_order.current_operator["ФИО"]}*',
             parse_mode='markdown')
+        global order_updater
+        order_updater.write_to_table(active_order.current_operator)
 
 
 def pass_order_to_next_operator(context: CallbackContext, operator):
