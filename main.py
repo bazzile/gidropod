@@ -24,12 +24,10 @@ from telegram.ext import (
     CallbackQueryHandler,
     ConversationHandler,
     CallbackContext,
-    InlineQueryHandler,
     MessageHandler,
     Filters
 )
 
-import time
 import threading
 
 from database import OrderUpdater, ActiveOrder
@@ -116,7 +114,7 @@ def review_order(update: Update, context: CallbackContext) -> int:
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.edit_message_text(
-        text=f"Заказ:\n{formatted_order}", reply_markup=reply_markup
+        text=f"*Заказ:*\n{formatted_order}", reply_markup=reply_markup, parse_mode='markdown'
     )
     return REVIEW_ORDER_STAGE
 
@@ -136,10 +134,10 @@ def assign_operators(update: Update, context: CallbackContext) -> int:
     for operator in operators:
         if operator['telegram_id'] == int(selected_person):
             operator['Selected'] = not operator['Selected']
-            if operator['DisplayName'].startswith('+'):
-                operator['DisplayName'] = operator['DisplayName'].replace('+', '')
+            if operator['DisplayName'].startswith('✅ '):
+                operator['DisplayName'] = operator['DisplayName'].replace('✅ ', '')
             else:
-                operator['DisplayName'] = '+' + operator['DisplayName']
+                operator['DisplayName'] = '✅ ' + operator['DisplayName']
 
     operator_buttons = [
         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
@@ -171,7 +169,7 @@ def end(update: Update, context: CallbackContext) -> int:
 
     # operators = [operator['telegram_id'] for operator in selected_operators]
     global active_order
-    active_order.set_operators(operators)
+    active_order.set_operators(selected_operators)
     operator = active_order.get_next_operator()
     ask(context, operator)
 
@@ -179,7 +177,7 @@ def end(update: Update, context: CallbackContext) -> int:
 
 
 def get_orders_table(update: Update, _: CallbackContext):
-    user = update.message.from_user.id
+    user = update.message.from_user
     if user.id == DISPATCHER_TELEGRAM_ID:
         update.message.reply_text(
             f'[Таблица заказов]({ORDERS_TABLE_URL})',
@@ -204,7 +202,7 @@ def cancel_order(update: Update, context: CallbackContext) -> int:
 
 
 def ask(context: CallbackContext, operator):
-
+    logger.info(f'Proposing order to {operator["ФИО"]}')
     operator_id = operator['telegram_id']
 
     keyboard = [[
@@ -216,9 +214,12 @@ def ask(context: CallbackContext, operator):
 
     try:
         message = context.bot.send_message(
-            chat_id=operator_id, text=f'Псс-c, работа есть!\n{active_order.format_order()}', reply_markup=reply_markup)
+            chat_id=operator_id, text=f'*Новый заказ!*\n'
+            f'{active_order.format_order()}\n\n'
+            f'_Через {ORDER_RESPONSE_TIME} мин. заказ будет передан следующему оператору_',
+            reply_markup=reply_markup, parse_mode='markdown')
 
-        timer = threading.Timer(ORDER_RESPONSE_TIME, timeout_proposal, [context, operator_id, message.message_id])
+        timer = threading.Timer(ORDER_RESPONSE_TIME * 60, timeout_proposal, [context, operator_id, message.message_id])
         active_order.set_timer(timer)
 
     except telegram.error.BadRequest:
@@ -251,10 +252,12 @@ def button(update: Update, context: CallbackContext) -> None:
         logger.info('Reporting to dispatcher')
         context.bot.send_message(
             chat_id=DISPATCHER_TELEGRAM_ID,
-            text=f'Заказ принят! Подробности:\n'
+            text=f'✅ *Заказ принят!*'
+                 f'\nПодробности:\n'
                  f'{active_order.format_order()}\n\n'
                  f'Заказ принял:\n'
-                 f'{active_order.current_operator["ФИО"]}')
+                 f'*{active_order.current_operator["ФИО"]}*',
+            parse_mode='markdown')
 
 
 def pass_order_to_next_operator(context: CallbackContext, operator):
@@ -264,7 +267,8 @@ def pass_order_to_next_operator(context: CallbackContext, operator):
         logger.info('No operators left in the queue, reporting to dispatcher')
         context.bot.send_message(
             chat_id=DISPATCHER_TELEGRAM_ID,
-            text='Внимание! Заказ НЕ ПРИНЯТ ни одним из выбранных операторов')
+            text='Внимание!\nЗаказ ❌*НЕ ПРИНЯТ*❌ ни одним из выбранных операторов',
+            parse_mode='markdown')
 
 
 def timeout_proposal(context: CallbackContext, chat_id, message_id) -> None:

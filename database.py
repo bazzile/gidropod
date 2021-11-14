@@ -43,7 +43,6 @@ class OrderUpdater(object):
 
 class ActiveOrder(object):
     def __init__(self, order_dict):
-        # self.operator_list = operator_list
         self.order = order_dict
         self.operator_list = None
         self.timer = None
@@ -53,7 +52,7 @@ class ActiveOrder(object):
     #     for operator in self.operator_list:
 
     def format_order(self):
-        return ",\n".join(": ".join((str(k), str(v))) for k, v in self.order.items())
+        return "\n".join(": ".join((str(k), '*' + str(v) + '*')) for k, v in self.order.items())
 
     def set_operators(self, operator_list):
         self.operator_list = operator_list
