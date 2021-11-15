@@ -102,7 +102,7 @@ def review_order(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
 
-    context.chat_data.pop('priority_count', None)
+    context.chat_data.pop('selected_operators', None)
 
     keyboard = [[
         InlineKeyboardButton("✅ Выбрать операторов", callback_data=str("select")),
@@ -131,33 +131,25 @@ def assign_operators(update: Update, context: CallbackContext) -> int:
     else:
         selected_person = query.data
 
-    # if 'priority_count' not in context.chat_data.keys():
-    #     context.chat_data['priority_count'] = 0
-    order_count = max([operator['Order'] for operator in operators])
+    if 'selected_operators' not in context.chat_data.keys():
+        selected_operators = []
+    else:
+        selected_operators = context.chat_data['selected_operators']
 
     for operator in operators:
         if operator['telegram_id'] == int(selected_person):
-            operator['Selected'] = not operator['Selected']
-
-            if operator['Selected']:
-                order_count += 1
-                operator['Order'] = order_count
+            if operator not in selected_operators:
+                selected_operators.insert(len(selected_operators), operator)
             else:
-                order_count -= 1
-                removed_priority = operator['Order']
-                for op in [operator for operator in operators if operator['Selected'] is True]:
-                    if op['Order'] >= removed_priority:
-                        op['Order'] -= 1
-                operator['Order'] = 0
+                selected_operators.remove(operator)
 
-        if operator['Order'] > 0:
-            operator['DisplayName'] = ' '.join([str(operator['Order']) + '👨🏿', operator['ФИО']])
+    context.chat_data['selected_operators'] = selected_operators
+
+    for operator in operators:
+        if operator in selected_operators:
+            operator['DisplayName'] = ' '.join([str(selected_operators.index(operator) + 1) + '👨🏿', operator['ФИО']])
         else:
             operator['DisplayName'] = operator['ФИО']
-            # if operator['DisplayName'].startswith('👨🏿 '):
-            #     operator['DisplayName'] = operator['DisplayName'].replace('👨🏿 ', '')
-            # else:
-            #     operator['DisplayName'] = '👨🏿 ' + operator['DisplayName']
 
     operator_buttons = [
         InlineKeyboardButton(operator['DisplayName'], callback_data=str(operator['telegram_id'])) for operator in operators]
@@ -178,16 +170,17 @@ def end(update: Update, context: CallbackContext) -> int:
     """Returns `ConversationHandler.END`, which tells the
     ConversationHandler that the conversation is over.
     """
-    global operators
-    selected_operators = [operator for operator in operators if operator['Selected']]
-    selected_operators = sorted(selected_operators, key=lambda d: d['Order'])
+    # global operators
+    # selected_operators = [operator for operator in operators if operator['Selected']]
+    # selected_operators = sorted(selected_operators, key=lambda d: d['Order'])
     query = update.callback_query
     query.answer()
 
-    if selected_operators:
+    selected_operators = context.chat_data['selected_operators']
 
+    if selected_operators:
         query.edit_message_text(text="Готово! На заказ выбраны:\n{}".format('\n'.join(
-            str(operator['Order']) + ' ' + operator['ФИО'] for operator in selected_operators)))
+            str(selected_operators.index(operator) + 1) + ' ' + operator['ФИО'] for operator in selected_operators)))
 
         # operators = [operator['telegram_id'] for operator in selected_operators]
         global active_order
