@@ -11,7 +11,6 @@ ORDERS_TABLE_URL = 'https://docs.google.com/spreadsheets/d/12hvOj1OvJC6tsMYfKCcL
 
 
 ORDER_RESPONSE_TIME = 10  # minutes
-# Todo оставить в диспетчерах только Серёгу
 # DISPATCHER_TELEGRAM_ID = [279777025]
 # DISPATCHER_TELEGRAM_ID = [279777025, 256887570, ]
 DISPATCHER_TELEGRAM_ID = 279777025

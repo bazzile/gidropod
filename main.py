@@ -74,9 +74,9 @@ def new_order(update: Update, _: CallbackContext) -> int:
         # The keyboard is a list of button rows, where each row is in turn
         # a list (hence `[[...]]`).
 
+        #  Todo: replace globals with chat data
         global operators
         operators = order_updater.get_operators()
-        operators = [dict(item, **{'Selected': False, 'DisplayName': item['ФИО'], 'Order': 0}) for item in operators]
 
         keyboard = [[
             InlineKeyboardButton("✅ Посмотреть заказ", callback_data=str("task")),
