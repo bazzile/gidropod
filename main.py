@@ -269,7 +269,8 @@ def button(update: Update, context: CallbackContext) -> None:
         pass_order_to_next_operator(context, operator)
 
     elif query.data == '1':
-        query.edit_message_text(text=f"✅ Вы приняли заказ")
+        query.edit_message_text(
+            text=f"✅ Вы приняли заказ\n\n{active_order.format_order()}", parse_mode='markdown')
         active_order.timer.cancel()
         logger.info('Order picked within set time, timer was canceled')
         logger.info('Reporting to dispatcher')
