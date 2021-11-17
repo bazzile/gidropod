@@ -68,7 +68,7 @@ def welcome(update: Update, _: CallbackContext) -> None:
     logger.info("User %s started the conversation.", user.first_name)
     update.message.reply_text(
         f"Привет!\nЯ - бот, который будет присылать заказы.\n"
-        f"Для начала работы пришли [Сергею Железнову](tg://user?id={DISPATCHER_TELEGRAM_ID}) этот код:", parse_mode='markdown')
+        f"Для начала работы пришли [диспетчеру](tg://user?id={DISPATCHER_TELEGRAM_ID}) этот код:", parse_mode='markdown')
     update.message.reply_text(f"*{update.message.chat_id}*", parse_mode='markdown')
 
 
@@ -102,7 +102,7 @@ def new_order(update: Update, _: CallbackContext) -> int:
         logger.info("User %s is NOT a dispatcher, refusing to place an order", user.first_name)
         update.message.reply_text(
             f'Заказы может создавать только диспетчер.\n'
-            f'Обратитесь к [Сергею Железнову](tg://user?id={DISPATCHER_TELEGRAM_ID})',
+            f'Обратитесь к [диспетчеру](tg://user?id={DISPATCHER_TELEGRAM_ID})',
             parse_mode='markdown')
 
 
@@ -212,7 +212,7 @@ def get_orders_table(update: Update, _: CallbackContext):
         logger.info("User %s is NOT a dispatcher, refusing to show orders", user.first_name)
         update.message.reply_text(
             f'Заказы может просматривать только диспетчер.\n'
-            f'Обратитесь к [Сергею Железнову](tg://user?id={DISPATCHER_TELEGRAM_ID})',
+            f'Обратитесь к [диспетчеру](tg://user?id={DISPATCHER_TELEGRAM_ID})',
             parse_mode='markdown')
 
 
