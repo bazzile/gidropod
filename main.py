@@ -68,7 +68,7 @@ def welcome(update: Update, _: CallbackContext) -> None:
     logger.info("User %s started the conversation.", user.first_name)
     update.message.reply_text(
         f"Привет!\nЯ - бот, который будет присылать заказы.\n"
-        f"Для начала работы пришли [Сергею Железнову](tg://user?id=279777025) этот код:", parse_mode='markdown')
+        f"Для начала работы пришли [Сергею Железнову](tg://user?id={DISPATCHER_TELEGRAM_ID}) этот код:", parse_mode='markdown')
     update.message.reply_text(f"*{update.message.chat_id}*", parse_mode='markdown')
 
 
@@ -101,8 +101,8 @@ def new_order(update: Update, _: CallbackContext) -> int:
     else:
         logger.info("User %s is NOT a dispatcher, refusing to place an order", user.first_name)
         update.message.reply_text(
-            'Заказы может создавать только диспетчер.\n'
-            'Обратитесь к [Сергею Железнову](tg://user?id=279777025)',
+            f'Заказы может создавать только диспетчер.\n'
+            f'Обратитесь к [Сергею Железнову](tg://user?id={DISPATCHER_TELEGRAM_ID})',
             parse_mode='markdown')
 
 
@@ -211,8 +211,8 @@ def get_orders_table(update: Update, _: CallbackContext):
     else:
         logger.info("User %s is NOT a dispatcher, refusing to show orders", user.first_name)
         update.message.reply_text(
-            'Заказы может просматривать только диспетчер.\n'
-            'Обратитесь к [Сергею Железнову](tg://user?id=279777025)',
+            f'Заказы может просматривать только диспетчер.\n'
+            f'Обратитесь к [Сергею Железнову](tg://user?id={DISPATCHER_TELEGRAM_ID})',
             parse_mode='markdown')
 
 
@@ -232,8 +232,8 @@ def ask(context: CallbackContext, operator):
     operator_id = operator['telegram_id']
 
     keyboard = [[
-        InlineKeyboardButton("Уже лечу", callback_data=str("1")),
-        InlineKeyboardButton("Я в запое, отмена", callback_data=str("0")),
+        InlineKeyboardButton("Принять", callback_data=str("1")),
+        InlineKeyboardButton("Отклонить", callback_data=str("0")),
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     global active_order
