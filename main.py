@@ -63,6 +63,15 @@ global operators
 global active_order
 
 
+def welcome(update: Update, _: CallbackContext) -> None:
+    user = update.message.from_user
+    logger.info("User %s started the conversation.", user.first_name)
+    update.message.reply_text(
+        f"Привет!\nЯ - бот, который будет присылать заказы.\n"
+        f"Для начала работы пришли [Сергею Железнову](tg://user?id=279777025) этот код:", parse_mode='markdown')
+    update.message.reply_text(f"*{update.message.chat_id}*", parse_mode='markdown')
+
+
 def new_order(update: Update, _: CallbackContext) -> int:
     user = update.message.from_user
     logger.info("User %s started the conversation.", user.first_name)
@@ -344,6 +353,7 @@ def main() -> None:
         allow_reentry=True
     )
 
+    dispatcher.add_handler(CommandHandler('start', welcome))
     dispatcher.add_handler(conv_handler)
     dispatcher.add_handler(CallbackQueryHandler(button))
     dispatcher.add_handler(CommandHandler('get_orders_table', get_orders_table))
